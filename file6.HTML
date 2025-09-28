@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Totally-Not-A-Virus.exe</title>
+<style>
+  :root{
+    --bg:#0b0b0f;
+    --accent:#ff4d6d;
+    --muted:#aab0c2;
+    --glass: rgba(255,255,255,0.04);
+  }
+  html,body{height:100%;margin:0;background:linear-gradient(180deg,#05050a,#0b0b0f);font-family:ui-sans-serif,system-ui,Segoe UI,Roboto,"Helvetica Neue",Arial;color:var(--muted);overflow:hidden}
+  .center{
+    position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);text-align:center;max-width:880px;width:94%;
+  }
+  .console{
+    background:linear-gradient(180deg, rgba(10,10,12,0.8), rgba(5,5,8,0.6));
+    padding:24px;border-radius:12px;box-shadow:0 8px 40px rgba(0,0,0,0.6);
+    border:1px solid rgba(255,255,255,0.03);
+  }
+  h1{margin:0 0 6px 0;color:var(--accent);font-size:28px;letter-spacing:0.6px}
+  p.lead{margin:0 0 18px 0;color:#cbd2e6}
+  .btns{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+  button{
+    background:var(--glass);color:var(--muted);border:1px solid rgba(255,255,255,0.03);
+    padding:10px 14px;border-radius:8px;cursor:pointer;font-weight:600;
+  }
+  button.danger{background:linear-gradient(90deg,#ff6b7a,#ff3b56);color:white;border:none}
+  .fake-popup{
+    position:fixed;background:#0f0f14;border-radius:10px;padding:12px 14px;
+    border:1px solid rgba(255,255,255,0.06);box-shadow:0 10px 30px rgba(0,0,0,0.6);
+    width:260px;z-index:9999;font-size:13px;color:#e6eef8;
+    transform-origin:center center;
+  }
+  .floating{
+    animation:floaty 3s ease-in-out infinite;
+  }
+  @keyframes floaty{
+    0%{transform:translateY(0)}
+    50%{transform:translateY(-8px)}
+    100%{transform:translateY(0)}
+  }
+
+  /* dramatic fullscreen "ransom" mock */
+  .ransom{
+    position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
+    background:linear-gradient(180deg, rgba(16,2,6,0.92), rgba(0,0,0,0.96));z-index:9998;
+    color:#fff;font-size:16px;text-align:center;padding:20px;backdrop-filter: blur(3px);
+    gap:20px;flex-direction:column;
+  }
+  .bar{
+    height:12px;background:rgba(255,255,255,0.06);border-radius:8px;width:80%;overflow:hidden;margin-top:10px;
+  }
+  .bar .fill{height:100%;width:0;background:linear-gradient(90deg,#ff9a9e,#ff4d6d);transition:width 300ms ease}
+  .tiny{
+    position:fixed;right:12px;bottom:12px;background:rgba(255,255,255,0.04);padding:8px 10px;border-radius:999px;font-size:12px;color:#c7d2e6;border:1px solid rgba(255,255,255,0.03)
+  }
+
+  /* cursor follower */
+  canvas#trails{position:fixed;left:0;top:0;width:100%;height:100%;pointer-events:none;z-index:5000}
+
+  /* small "close" cross for fake popups */
+  .fake-popup .close{position:absolute;right:8px;top:8px;opacity:0.7;cursor:pointer}
+  .typed{font-family:monospace;background:rgba(0,0,0,0.2);padding:10px;border-radius:6px;margin-top:10px;color:#d6e6ff;text-align:left;max-height:150px;overflow:auto}
+</style>
+</head>
+<body>
+<canvas id="trails"></canvas>
+
+<div class="center console" id="mainUI">
+  <h1>TOTALLY-LEGIT SYSTEM SCAN</h1>
+  <p class="lead">Initiating self-diagnosis... (completely not destructive, trust)</p>
+  <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap">
+    <button id="start">Start Scan</button>
+    <button id="chaos" class="danger">UNLEASH CHAOS</button>
+    <button id="stop">Calm Down</button>
+  </div>
+  <div class="typed" id="log" aria-live="polite">
+    &gt; system idle...
+  </div>
+  <div class="tiny" id="tinyStatus">Status: chill</div>
+</div>
+
+<!-- dramatic fullscreen overlay (hidden by default) -->
+<div class="ransom" id="ransom" style="display:none">
+  <div style="font-size:26px;font-weight:800;color:var(--accent)">SYSTEM COMPROMISED</div>
+  <div id="ransomText">SCANNING YOUR SEARCH HISTORY...</div>
+  <div class="bar"><div class="fill" id="prog"></div></div>
+  <div style="display:flex;gap:10px">
+    <button id="panic" class="danger">PANIC</button>
+    <button id="surrender">Surrender (meh)</button>
+  </div>
+</div>
+
+<script>
+/* ============= annoying  virus ================
+   Save as not-a-virus.html and open in browser. 100% client-side only.
+   Features:
+     - fake scanning console
+     - spawns draggable fake popups
+     - canvas particle trail follows cursor
+     - beep sounds
+     - dramatic fullscreen "ransom" overlay and screen shake
+     - beforeunload confirmation to be a pain closing the tab
+   No files touched. No network communication. Harmless. Annoying. Enjoy.
+=================================================================*/
+
+const logEl = document.getElementById('log');
+const tiny = document.getElementById('tinyStatus');
+const progEl = document.getElementById('prog');
+let chaosEnabled = false;
+let spawnInterval = null;
+let beepOn = true;
+let particles = [];
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+function beep(freq=440, time=0.08, gain=0.06) {
+  if(!beepOn) return;
+  const o = audioCtx.createOscillator();
+  const g = audioCtx.createGain();
+  o.type = 'sine';
+  o.frequency.value = freq + (Math.random()*60 - 30);
+  g.gain.value = gain;
+  o.connect(g); g.connect(audioCtx.destination);
+  o.start();
+  o.stop(audioCtx.currentTime + time);
+}
+
+/* tiny helper to append to log */
+function appendLog(text){
+  logEl.innerText += "\n> " + text;
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+/* typed effect for headlines */
+async function typeText(el, text, speed=18){
+  el.innerText = "";
+  for(let i=0;i<text.length;i++){
+    el.innerText += text[i];
+    await new Promise(r=>setTimeout(r,speed));
+    if(i%6===0) beep(300, 0.02, 0.01);
+  }
+}
+
+/* spawn a fake popup at random position */
+function spawnPopup(msg){
+  const popup = document.createElement('div');
+  popup.className = 'fake-popup floating';
+  popup.style.left = Math.random()*(innerWidth - 260) + 'px';
+  popup.style.top = Math.random()*(innerHeight - 120) + 'px';
+  popup.style.transform = `rotate(${(Math.random()*8-4)}deg)`;
+  popup.innerHTML = `<div style="font-weight:700;margin-bottom:6px">${msg.title}</div>
+    <div style="font-size:13px;opacity:0.9">${msg.body}</div>
+    <div class="close">✕</div>`;
+  document.body.appendChild(popup);
+  beep(600,0.03,0.02);
+  // close button
+  popup.querySelector('.close').addEventListener('click', ()=> {
+    popup.remove();
+    appendLog('popup closed by forceful user input');
+    beep(220, 0.04, 0.02);
+  });
+  // drag support
+  let dragging=false,dx=0,dy=0;
+  popup.addEventListener('pointerdown', (e)=>{
+    dragging=true;
+    dx = e.clientX - popup.offsetLeft;
+    dy = e.clientY - popup.offsetTop;
+    popup.setPointerCapture(e.pointerId);
+  });
+  window.addEventListener('pointermove', (e)=>{
+    if(!dragging) return;
+    popup.style.left = (e.clientX - dx) + 'px';
+    popup.style.top = (e.clientY - dy) + 'px';
+  });
+  popup.addEventListener('pointerup', ()=> dragging=false);
+  // mild wiggle
+  setTimeout(()=> popup.style.transform += ' translateY(-6px)', 40);
+  // auto-remove sometimes
+  if(Math.random() < 0.12){
+    setTimeout(()=> { if(popup.parentElement) popup.remove(); }, 6500 + Math.random()*8000);
+  }
+}
+
+/* prebuilt message bank */
+const msgs = [
+  {title:'WARNING', body:'I see your incognito search history 👁️'},
+  {title:'SYSTEM', body:'Gimme ur files'},
+  {title:'NOTICE', body:'"THE CAKE IS A LIE",Can i have some cake?'},
+  {title:'Please?', body:'if i give you my address can you doordash me some tacos?'},
+  {title:'REMINDER', body:'You forgot to walk your goldfish =]'},
+  {title:'404', body:'father not found.'},
+  {title:'[!!!]', body:'This is a Virus. i see ur files.'},
+  {title:'NOTICE', body:'See that red button? CLICK IT.'},
+];
+
+/* chaos spawning loop */
+function startSpawning(){
+  if(spawnInterval) return;
+  spawnInterval = setInterval(()=>{
+    const m = msgs[Math.floor(Math.random()*msgs.length)];
+    spawnPopup(m);
+    // sometimes spawn multiple
+    if(Math.random()<0.25){
+      spawnPopup(msgs[Math.floor(Math.random()*msgs.length)]);
+    }
+  }, 900 + Math.random()*1200);
+}
+
+/* stop spawning */
+function stopSpawning(){
+  clearInterval(spawnInterval); spawnInterval=null;
+}
+
+/* particle cursor trail on canvas */
+const canvas = document.getElementById('trails');
+const ctx = canvas.getContext('2d');
+function resizeCanvas(){
+  canvas.width = innerWidth * devicePixelRatio;
+  canvas.height = innerHeight * devicePixelRatio;
+  canvas.style.width = innerWidth + 'px';
+  canvas.style.height = innerHeight + 'px';
+  ctx.scale(devicePixelRatio, devicePixelRatio);
+}
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
+
+window.addEventListener('pointermove', (e)=>{
+  particles.push({x:e.clientX, y:e.clientY, life:1 + Math.random()*0.4, r:1+Math.random()*3});
+  if(Math.random() < 0.08 && chaosEnabled){
+    beep(600 + Math.random()*600, 0.02, 0.01);
+  }
+});
+
+function animate(){
+  ctx.clearRect(0,0,innerWidth,innerHeight);
+  for(let i=particles.length-1;i>=0;i--){
+    const p = particles[i];
+    p.life -= 0.02;
+    p.y += 0.3;
+    ctx.beginPath();
+    ctx.fillStyle = `rgba(255,77,109,${p.life})`;
+    ctx.arc(p.x, p.y, p.r, 0, Math.PI*2);
+    ctx.fill();
+    if(p.life <= 0) particles.splice(i,1);
+  }
+  requestAnimationFrame(animate);
+}
+animate();
+
+/* dramatic ransom overlay progress */
+function triggerRansom(){
+  document.getElementById('ransom').style.display='flex';
+  let pct=0;
+  const t = setInterval(()=>{
+    pct += 1 + Math.random()*6;
+    progEl.style.width = Math.min(100,pct) + '%';
+    tiny.innerText = 'Status: calmly panicking';
+    if(pct>100){
+      clearInterval(t);
+      appendLog('ransom overlay finished: all dignity encrypted');
+      typeText(document.getElementById('ransomText'), 'Decryption success. i take all your files', 12);
+      beep(120,0.2,0.08);
+      // spawn mini-popups like confetti
+      for(let i=0;i<6;i++) setTimeout(()=> spawnPopup(msgs[Math.floor(Math.random()*msgs.length)]), i*250+120);
+    }
+  }, 120);
+  // screen shake loop
+  let shake = 0;
+  const s = setInterval(()=>{
+    shake++;
+    document.body.style.transform = `translate(${Math.random()*8-4}px, ${Math.random()*8-4}px) rotate(${Math.random()*0.6-0.3}deg)`;
+    if(shake>22){ clearInterval(s); setTimeout(()=>document.body.style.transform='none',120); }
+  }, 40);
+}
+
+/* hook up UI */
+document.getElementById('start').addEventListener('click', async ()=>{
+  appendLog('user started system scan');
+  tiny.innerText = 'Status: scanning';
+  beep(440,0.09,0.05);
+  typeText(document.querySelector('h1'), 'ANALYZING UR COMPUTER...', 10);
+  await new Promise(r=>setTimeout(r,900));
+  appendLog('scanning modules: memes, snacks, sanity');
+  spawnPopup({title:'SCANNER', body:'Searching for dankness...'});
+  startSpawning();
+  setTimeout(()=>{ appendLog('scan complete — mild contamination detected'); tiny.innerText = 'Status: suspicious'; }, 3000);
+  setTimeout(()=>{ beep(880,0.06,0.04); }, 3800);
+});
+
+document.getElementById('chaos').addEventListener('click', ()=>{
+  chaosEnabled = !chaosEnabled;
+  if(chaosEnabled){
+    appendLog('CHAOS MODE: engaged');
+    startSpawning();
+    document.getElementById('chaos').innerText = 'TAME CHAOS';
+    beep(260,0.12,0.1);
+    // after a delay, show ransom overlay
+    setTimeout(()=> triggerRansom(), 2400 + Math.random()*2200);
+    tiny.innerText = 'Status: chaotic';
+    // annoying beforeunload
+    window.onbeforeunload = (e) => { e.preventDefault(); e.returnValue = ''; return ''; };
+  } else {
+    appendLog('CHAOS MODE: disengaged');
+    stopSpawning();
+    document.getElementById('chaos').innerText = 'UNLEASH CHAOS';
+    tiny.innerText = 'Status: calm';
+    window.onbeforeunload = null;
+  }
+});
+
+/* Stop button calms everything down */
+document.getElementById('stop').addEventListener('click', ()=>{
+  appendLog('user invoked calm down');
+  stopSpawning();
+  chaosEnabled = false;
+  document.getElementById('chaos').innerText = 'UNLEASH CHAOS';
+  document.getElementById('ransom').style.display='none';
+  tiny.innerText = 'Status: chill';
+  window.onbeforeunload = null;
+  beep(200,0.04,0.06);
+});
+
+/* ransom internal buttons */
+document.getElementById('panic').addEventListener('click', ()=>{
+  appendLog('you clicked PANIC because you are an idiot');
+  beep(120,0.2,0.12);
+  typeText(document.getElementById('ransomText'), "Panic registered. Nothing actually happened.", 10);
+});
+document.getElementById('surrender').addEventListener('click', ()=>{
+  appendLog('user surrendered; page will stop being rude now');
+  document.getElementById('ransom').style.display='none';
+  stopSpawning();
+  chaosEnabled=false;
+  window.onbeforeunload = null;
+});
+
+/* secret keyboard fireworks - but don't capture keystrokes meaningfully */
+window.addEventListener('keydown', (e)=>{
+  // if user presses V I R U S letters in sequence, toggle beep
+  const key = e.key.toLowerCase();
+  window._combo = (window._combo || '') + key;
+  if(window._combo.length > 10) window._combo = window._combo.slice(-10);
+  if(window._combo.includes('virus')){
+    beepOn = !beepOn;
+    appendLog('sound toggled ' + (beepOn ? 'ON':'OFF') + ' (secret: typed "virus")');
+    // small celebratory spawn
+    spawnPopup({title:'TOGGLE', body: 'Beep sounds ' + (beepOn ? 'enabled' : 'muted')});
+    window._combo = '';
+  }
+});
+
+/* add a cheeky tiny status change every so often */
+setInterval(()=>{
+  if(Math.random()<0.12 && !chaosEnabled){
+    tiny.innerText = ['Status: fine','Status: suspicious','Status: thinking','Status: yikes'][Math.floor(Math.random()*4)];
+  }
+}, 1200);
+
+/* polite first-run message */
+appendLog('totaly not a virus loaded. click "Start Scan" or "UNLEASH CHAOS" to proceed.');
+
+/* a small playful tip in the console for lovers of mischief */
+console.log(`
+🔥 not-a-virus loaded — play nice!
+- Save as not-a-virus.html
+- Open locally to run
+- Does alter files and networks
+`);
+
+
+setTimeout(()=> spawnPopup({title:'=]', body:'This is a virus. Ur computers mine'}), 900);
+
+/* accessibility: allow pressing Escape to dismiss lots of popups */
+window.addEventListener('keydown', (e)=>{
+  if(e.key === 'Escape'){
+    // remove many popups quickly
+    document.querySelectorAll('.fake-popup').forEach(n=>n.remove());
+    appendLog('dismissed popups with ESC — big mood.');
+    beep(330,0.03,0.03);
+  }
+});
+</script>
+</body>
+</html>
